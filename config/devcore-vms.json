@@ -1,0 +1,15 @@
+{
+  "vms": [
+    {
+      "id": "devcore-demo-01",
+      "company": "Theós",
+      "pocName": "POC Theós",
+      "vmName": "devcore-demo-01",
+      "pocStart": "2026-10-13",
+      "pocEnd": "2026-11-11",
+      "slots": 6,
+      "source": "push",
+      "tokenEnv": "DEVCORE_METRICS_TOKEN_DEVCORE_DEMO_01"
+    }
+  ]
+}

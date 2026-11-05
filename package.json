@@ -1,0 +1,35 @@
+{
+  "name": "devcore-monitor",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint",
+    "typecheck": "next typegen && tsc --noEmit",
+    "test": "npm run test:site && npm run test:agent",
+    "test:site": "node --require ./tests/server-only-stub.cjs --import tsx --test tests/*.test.ts",
+    "test:agent": "python3 -m unittest discover -s infra/devcore-vm-agent/tests",
+    "hash-password": "tsx scripts/hash-password.ts"
+  },
+  "dependencies": {
+    "bcryptjs": "3.0.3",
+    "next": "16.3.5",
+    "next-auth": "5.0.0-beta.32",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "zod": "4.6.5"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "4.3.3",
+    "@types/node": "20.19.43",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "eslint": "9.39.5",
+    "eslint-config-next": "16.3.5",
+    "tailwindcss": "4.3.3",
+    "tsx": "4.23.13",
+    "typescript": "5.9.3"
+  }
+}

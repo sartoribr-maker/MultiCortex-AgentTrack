@@ -1,0 +1,40 @@
+# /etc/devcore-metrics/agent.conf — all keys are optional (defaults shown).
+[agent]
+samples_glob = /var/log/devcore-poc/samples.csv*
+# Comma-separated: passive capture log (gateway traffic) + nginx vhost log
+access_log_glob = /var/log/devcore-poc/requests-*.log*,/var/log/nginx/devcore01.access.log*
+# X-Forwarded-Host values that count as DevCore (others = "outros")
+devcore_hosts = devcore01.multicortex.com.br
+output = /srv/www/devcore-metrics/metrics.json
+state_dir = /var/lib/devcore-metrics
+slots = 8
+chat_path = /v1/chat/completions
+api_prefix = /v1/
+retention_days = 45
+# Brasilia (no daylight saving time since 2019)
+utc_offset_minutes = -180
+timeline_interval_s = 300
+# Empty = machine hostname
+host =
+# systemd unit of llama.cpp: its journal gives the reason for 400/5xx, the
+# context size and tokens/s for the technical opinion. Empty disables it.
+server_unit = multicortex-server
+# Today's usage per developer IP in metrics.json (dashboard card "Desenvolvedores
+# ativos hoje"). false = counts only, no IP addresses in the output.
+developer_details = true
+
+# devcore_http_capture.py (passive request log; traffic via the Apache gateway)
+[capture]
+port = 7080
+# tcpdump filter added to "tcp port <port>"; loopback = the VM's own tests
+bpf_extra = not net 127.0.0.0/8
+log_dir = /var/log/devcore-poc
+retention_days = 60
+# Live snapshot (capture 1.3+): written here and pushed to <push_url>/live.
+# Online = request in progress or successful API call in the last window.
+live_interval_s = 10
+online_window_s = 300
+live_output = /var/lib/devcore-metrics/live.json
+
+# Push to the site is configured by install.sh --push-url in push.conf
+# ([agent] push_url = ...); the token lives in push.token (mode 600).

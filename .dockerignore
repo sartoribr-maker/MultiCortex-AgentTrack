@@ -1,0 +1,14 @@
+node_modules
+.next
+.git
+.env
+.env.*
+*.log
+*.tar
+*.tar.gz
+*.tsbuildinfo
+infra
+docs
+tests
+PROMPT.md
+__pycache__

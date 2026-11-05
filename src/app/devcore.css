@@ -1,0 +1,38 @@
+@import "tailwindcss";
+
+/* DevCore Monitor — MultiCortex brand, light surface. */
+:root {
+  --dc-navy: #1f3a5f;
+  --dc-blue: #2e507e;
+  --dc-purple: #593e8f;
+  --dc-orange: #f68e35;
+  --dc-ok: #3e9c79;
+  --dc-alert: #ef325a;
+  --dc-warn: #c8641a;
+  --dc-text: #3a3a3c;
+  --dc-text-muted: #6b6f78;
+  --dc-bg: #f4f6fa;
+  --dc-surface: #ffffff;
+  --dc-border: #e1e6ee;
+  --dc-grid: #eceff4;
+  /* Series colors: brand blue/orange re-stepped to pass the CVD and 3:1 contrast checks. */
+  --dc-series-1: #3567b5;
+  --dc-series-2: #d9741f;
+  --dc-font: var(--font-carlito), Calibri, "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+}
+
+html {
+  color-scheme: light;
+}
+
+body {
+  background: var(--dc-bg);
+  color: var(--dc-text);
+  font-family: var(--dc-font);
+  min-width: 320px;
+  overflow-x: hidden;
+}
+
+.dc-num {
+  font-variant-numeric: tabular-nums;
+}

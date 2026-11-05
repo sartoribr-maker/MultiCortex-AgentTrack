@@ -1,0 +1,17 @@
+[Unit]
+Description=DevCore POC metrics aggregation (metrics.json)
+After=network.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 -I /usr/local/lib/devcore-metrics/devcore_metrics_agent.py --config /etc/devcore-metrics/agent.conf
+Nice=10
+IOSchedulingClass=idle
+# Read-only access to the logs; writes only to its output and state folders.
+ProtectSystem=strict
+ReadWritePaths=/srv/www/devcore-metrics /var/lib/devcore-metrics
+ProtectHome=true
+PrivateTmp=true
+NoNewPrivileges=true
+UMask=0022
+TimeoutStartSec=50

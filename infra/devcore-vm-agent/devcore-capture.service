@@ -1,0 +1,24 @@
+[Unit]
+Description=DevCore passive HTTP request logger (read-only copy of llama.cpp traffic)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# tcpdump observes the packets; it is not in the traffic path. Only HTTP
+# headers are parsed; prompt/answer bodies are never stored.
+ExecStart=/usr/bin/python3 -I /usr/local/lib/devcore-metrics/devcore_http_capture.py --config /etc/devcore-metrics/agent.conf
+Restart=always
+RestartSec=5
+Nice=5
+CPUQuota=30%
+MemoryMax=300M
+ProtectSystem=strict
+# live.json (snapshot of this moment) goes to the agent state dir.
+ReadWritePaths=/var/log/devcore-poc /var/lib/devcore-metrics
+ProtectHome=true
+PrivateTmp=true
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,23 @@
+# dependências
+/node_modules
+
+# Next.js
+/.next/
+/out/
+/build
+next-env.d.ts
+*.tsbuildinfo
+
+# ambiente (segredos nunca vão para o Git)
+.env
+.env.*
+!.env.example
+
+# diversos
+.DS_Store
+*.log
+*.tar
+*.tar.gz
+*.pem
+__pycache__/
+*.pyc

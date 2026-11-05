@@ -1,0 +1,15 @@
+# DevCore Monitor no EC2 (/opt/multicortex/devcore-monitor). Projeto: devcore-monitor.
+# Uma única instância: as métricas recebidas ficam na memória do processo.
+services:
+  app:
+    image: devcore-monitor:current
+    restart: unless-stopped
+    env_file: .env.production
+    ports:
+      # Só o nginx do EC2 acessa (devcore.multicortex.com.br e a ingestão em site.multicortex.com.br).
+      - "127.0.0.1:3002:3000"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
