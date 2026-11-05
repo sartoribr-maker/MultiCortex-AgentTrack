@@ -51,19 +51,43 @@ O `sudo docker build` local pede a sua senha. Ao fim, `devcore-monitor-app-1` re
 
 ## 3. Virada da ingestão (EC2, vhost do site)
 
-1. Cópia de segurança:
-   `sudo cp -p /etc/nginx/vhosts.d/multicortex.conf /etc/nginx/vhosts.d/multicortex.conf.bak-devcore-$(date +%Y%m%d-%H%M%S)`
-2. Acrescentar o bloco de `infra/ec2/nginx-site-ingest-location.conf` dentro do
-   `server { }` que atende `site.multicortex.com.br`, antes do `location /`
-   (o comando exato de edição é preparado depois de ver o arquivo, passo 0).
-3. `sudo nginx -t`
-4. `sudo systemctl reload nginx`
+Só depois do passo 2 (contêiner novo respondendo); antes disso a regra daria 502 e o
+envio daquele minuto se perderia.
 
-Em até 1 min o pod faz o próximo envio, que já cai no contêiner novo. Conferência (envio
-do pod aceito pelo contêiner novo; os acessos aparecem no log do nginx):
-`sudo tail -n 5 /var/log/nginx/access.log` (procure `POST /api/devcore/ingest/devcore-demo-01 … 204`).
+A regra fica num arquivo próprio, incluído no bloco 443 de `site.multicortex.com.br`
+(o `server_name` aparece também no bloco 80 do fim do arquivo; o `sed` abaixo altera só
+a primeira ocorrência, que é a do 443).
+
+```bash
+# no seu PC, na raiz do projeto
+scp infra/ec2/nginx-site-ingest-location.conf ec2-user@52.207.145.100:/tmp/
+```
+
+No EC2, um comando por vez:
+
+```bash
+sudo install -D -m 644 /tmp/nginx-site-ingest-location.conf /etc/nginx/devcore-monitor/ingest-location.conf
+sudo cp -p /etc/nginx/vhosts.d/multicortex.conf /etc/nginx/vhosts.d/multicortex.conf.bak-devcore-$(date +%Y%m%d-%H%M%S)
+sudo sed -i '0,/server_name site\.multicortex\.com\.br;/s//&\n    include \/etc\/nginx\/devcore-monitor\/ingest-location.conf;/' /etc/nginx/vhosts.d/multicortex.conf
+sudo grep -n ingest-location /etc/nginx/vhosts.d/multicortex.conf
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
+O `grep` deve mostrar **uma** linha (logo abaixo do primeiro `server_name`). Se o
+`nginx -t` falhar, não recarregue: restaure a cópia (seção "Voltar atrás").
+
+Conferência: sem token, o caminho já responde pelo contêiner novo com 401 e o cabeçalho
+`noarchive` (o site respondia sem ele):
+`curl -s -D - -o /dev/null -X POST https://site.multicortex.com.br/api/devcore/ingest/devcore-demo-01 | grep -iE '^HTTP|x-robots'`
+
+Em até 1 min o pod faz o próximo envio, que já cai no contêiner novo.
 
 ## 4. Virada do painel (EC2, vhost do DevCore)
+
+O `devcore.conf` também inclui `/etc/nginx/devcore-loadtest/teste-location.conf`
+(`/teste/` → `127.0.0.1:8095`, ferramenta de teste de carga). Ele não usa a porta 3001
+e não muda: só o `proxy_pass` do `location /` é trocado.
 
 1. Troca do `proxy_pass` com cópia de segurança automática (`devcore.conf.bak-…`):
    `sudo sed -i.bak-$(date +%Y%m%d-%H%M%S) 's#proxy_pass http://127.0.0.1:3001;#proxy_pass http://127.0.0.1:3002;#' /etc/nginx/vhosts.d/devcore.conf`
@@ -82,7 +106,8 @@ do pod aceito pelo contêiner novo; os acessos aparecem no log do nginx):
 
 ## Voltar atrás
 
-Restaurar as cópias e recarregar (um comando por vez):
+Restaurar as cópias e recarregar (um comando por vez). O arquivo
+`/etc/nginx/devcore-monitor/ingest-location.conf` pode ficar: sem o `include`, não tem efeito.
 
 ```bash
 sudo cp -p /etc/nginx/vhosts.d/devcore.conf.bak-<data> /etc/nginx/vhosts.d/devcore.conf
@@ -102,6 +127,10 @@ Reinstalar o agente do pod apontando direto para o painel (procedimento de envio
 ```bash
 bash /root/devcore-vm-agent/install-pod.sh --push-url https://devcore.multicortex.com.br/api/devcore/ingest/devcore-demo-01
 ```
+
+Antes, para manter o limite de 2 MB do contrato nesse host (o padrão do nginx é 1 MB),
+acrescente `client_max_body_size 3m;` ao `location /` de `devcore.conf` (cópia,
+edição, `nginx -t`, reload).
 
 Quando todos os agentes usarem essa URL, remova o `location /api/devcore/ingest/` do
 vhost do site (mesmo roteiro: cópia, edição, `nginx -t`, reload).

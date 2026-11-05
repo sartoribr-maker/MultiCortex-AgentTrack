@@ -14,9 +14,12 @@ say() { printf '\n\033[1;36m%s\033[0m\n' "$*"; }
 fail() { echo "ERRO: $*" >&2; exit 1; }
 
 [[ -f Dockerfile && -f docker-compose.prod.yml && -f package.json ]] || fail "Execute na raiz do projeto DevCore Monitor."
-for cmd in git npm npx python3 sudo docker ssh scp gzip; do
+for cmd in git npm npx python3 docker ssh scp gzip; do
   command -v "$cmd" >/dev/null || fail "Comando ausente: $cmd"
 done
+# Docker local: direto quando o usuário tem acesso; senão, com sudo (pede senha).
+DOCKER=(docker)
+docker info >/dev/null 2>&1 || DOCKER=(sudo docker)
 [[ -z "$(git status --porcelain)" ]] || fail "Árvore Git com alterações. Faça commit antes do deploy."
 COMMIT="$(git rev-parse --short HEAD)"
 
@@ -32,10 +35,20 @@ set -Eeuo pipefail
 test -d "$REMOTE_DIR" || { echo "ERRO: crie $REMOTE_DIR (veja docs/devcore-dashboard.md, seção 5)." >&2; exit 1; }
 ENV_FILE="$REMOTE_DIR/.env.production"
 sudo test -f "$ENV_FILE" || { echo "ERRO: falta $ENV_FILE." >&2; exit 1; }
-# Só confere se as variáveis existem e não estão vazias; nunca mostra os valores.
+# Confere presença (uma vez só) e formato das variáveis; nunca mostra os valores.
 for var in AUTH_SECRET AUTH_URL DEVCORE_USERS DEVCORE_METRICS_TOKEN_DEVCORE_DEMO_01; do
   sudo grep -Eq "^${var}=.+" "$ENV_FILE" || { echo "ERRO: $var ausente ou vazia em $ENV_FILE." >&2; exit 1; }
+  [[ "$(sudo grep -c "^${var}=" "$ENV_FILE")" == 1 ]] || { echo "ERRO: $var aparece mais de uma vez em $ENV_FILE." >&2; exit 1; }
 done
+sudo grep -Eq '^AUTH_URL=https://devcore\.multicortex\.com\.br/?$' "$ENV_FILE" \
+  || { echo "ERRO: AUTH_URL deve ser https://devcore.multicortex.com.br." >&2; exit 1; }
+sudo grep -Eq '^AUTH_SECRET=.{32,}$' "$ENV_FILE" || { echo "ERRO: AUTH_SECRET curto demais." >&2; exit 1; }
+sudo grep -Eq '^DEVCORE_METRICS_TOKEN_DEVCORE_DEMO_01="?[A-Za-z0-9_-]{32,}"?$' "$ENV_FILE" \
+  || { echo "ERRO: DEVCORE_METRICS_TOKEN_DEVCORE_DEMO_01 com formato inválido." >&2; exit 1; }
+# Cada entrada: email:hash(base64 ou bcrypt)[:Nome], separadas por vírgula (scripts/hash-password.ts).
+USER_RE='[^@:,[:space:]<>]+@[^@:,[:space:]<>]+\.[^@:,[:space:]<>]+:[A-Za-z0-9+/=$.]{50,}(:[^,:<>]*)?'
+sudo grep -Eq "^DEVCORE_USERS=${USER_RE}(,${USER_RE})*$" "$ENV_FILE" \
+  || { echo "ERRO: DEVCORE_USERS com formato inválido (gere com npm run hash-password)." >&2; exit 1; }
 # A porta precisa estar livre ou ser deste mesmo contêiner.
 if ss -ltn | grep -Eq "127.0.0.1:${PORT}\b|:${PORT}\b"; then
   sudo docker ps --filter "name=^${CONTAINER}$" --format '{{.Ports}}' | grep -q "${PORT}->3000" \
@@ -45,10 +58,10 @@ echo 'Diretório, variáveis e porta: OK'
 REMOTE
 
 say "3/6 — Construindo a imagem localmente"
-sudo docker build -t "devcore-monitor:$COMMIT" -t devcore-monitor:current .
+"${DOCKER[@]}" build -t "devcore-monitor:$COMMIT" -t devcore-monitor:current .
 
 say "4/6 — Enviando a imagem (docker save | ssh)"
-sudo docker save "devcore-monitor:$COMMIT" | gzip | ssh "$REMOTE_HOST" 'gunzip | sudo docker load'
+"${DOCKER[@]}" save "devcore-monitor:$COMMIT" | gzip | ssh "$REMOTE_HOST" 'gunzip | sudo docker load'
 scp -q docker-compose.prod.yml "$REMOTE_HOST:$REMOTE_DIR/docker-compose.prod.yml"
 
 say "5/6 — Guardando a imagem anterior e recriando o contêiner"
