@@ -1,5 +1,7 @@
 "use client";
 
+import { BASE_PATH } from "@/lib/base-path";
+
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { DevcoreLiveResult } from "@/lib/devcore/live";
@@ -17,7 +19,7 @@ export function LiveNow({ vmId, slots, initial, now }: Props) {
 
   const refresh = useCallback(async () => {
     try {
-      const response = await fetch(`/api/devcore/vms/${encodeURIComponent(vmId)}/live`, { cache: "no-store" });
+      const response = await fetch(`${BASE_PATH}/api/devcore/vms/${encodeURIComponent(vmId)}/live`, { cache: "no-store" });
       if (response.status === 401) {
         router.push("/entrar");
         return;

@@ -1,0 +1,24 @@
+# Candidate for a FUTURE approved cutover. Do not run against a shared state while
+# devcore-agenttrack is active. Production's existing 3002 service is preserved.
+services:
+  app:
+    image: devcore-monitor:release-candidate
+    restart: unless-stopped
+    env_file: .env.release
+    environment:
+      NEXT_PUBLIC_BASE_PATH: ""
+      HEALTH_PATH: /robots.txt
+      DEVCORE_POC_MODE: "1"
+      DEVCORE_METRICS_RETENTION_DAYS: "90"
+      DEVCORE_POCS_FILE: /var/lib/devcore-agenttrack/pocs.json
+      DEVCORE_AGENTS_FILE: /var/lib/devcore-agenttrack/agents.json
+      DEVCORE_TELEMETRY_DIR: /var/lib/devcore-agenttrack/telemetry
+    ports:
+      - "127.0.0.1:3004:3000"
+    volumes:
+      - /opt/multicortex/devcore-agenttrack/state:/var/lib/devcore-agenttrack:Z
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

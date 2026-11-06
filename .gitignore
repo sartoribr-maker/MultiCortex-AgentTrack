@@ -21,3 +21,6 @@ next-env.d.ts
 *.pem
 __pycache__/
 *.pyc
+
+# Cópias locais de trabalho do agente (preservadas no disco, fora do Git).
+/infra/devcore-universal-agent/*.backup*

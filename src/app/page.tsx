@@ -1,3 +1,6 @@
+import { pocMode } from "@/lib/devcore/poc-store";
+import { PocShell } from "@/components/devcore/poc-shell";
+import { UniversalAgentsPanel } from "@/components/devcore/universal-agents-panel";
 import { redirect } from "next/navigation";
 import { getDevcoreAccess } from "@/lib/devcore/session";
 import { findDevcoreVm, listDevcoreVms, toPublicVm } from "@/lib/devcore/registry";
@@ -10,6 +13,8 @@ import { devcoreLogoutAction } from "./actions";
 export default async function DevcorePage({ searchParams }: PageProps<"/">) {
   const access = await getDevcoreAccess();
   if (!access.ok) redirect("/entrar");
+
+  if (pocMode()) return <PocShell />;
 
   const vms = listDevcoreVms();
   const { vm: requested } = await searchParams;
@@ -33,7 +38,8 @@ export default async function DevcorePage({ searchParams }: PageProps<"/">) {
       </header>
       <main>
         <DevcoreDashboard key={selected?.id} vms={vms.map(toPublicVm)} initial={initial} initialLive={initialLive} />
-      </main>
+        <UniversalAgentsPanel />
+</main>
     </>
   );
 }

@@ -1,0 +1,24 @@
+# Merge these instructions into the Dockerfile already used for the model.
+# This is an integration example, not a replacement base image or startup command.
+# Python 3.6+, trusted CA certificates and /bin/sh must already be available.
+COPY devcore-universal-agent-template-v2/ /tmp/devcore-agent-kit/
+RUN python3 /tmp/devcore-agent-kit/install.py \
+    --install-dir /opt/multicortex/devcore-universal-agent
+
+# Non-secret default, overridable when creating each POD.
+ENV MULTICORTEX_MONITOR_URL=https://devcore.multicortex.com.br/agenttrack
+
+# In the EXISTING startup script, add BEFORE the original exec/model command:
+# python3 /opt/multicortex/devcore-universal-agent/template_boot.py || \
+#     echo '[multicortex] Confira os logs: agente nao iniciou' >&2
+# Keep all existing SSH/Jupyter/llama.cpp startup commands.
+# Do NOT run template_boot.py, configure, start or supervisor.py during build.
+# Do NOT put a real bootstrap token in ENV/ARG/COPY or image layers.
+
+# If no existing local metrics source is present, install tcpdump IN THE IMAGE,
+# using the base image's package manager (not on the developer workstation).
+# Debian/Ubuntu example: RUN apt-get update && apt-get install -y --no-install-recommends tcpdump ca-certificates
+# Alpine example: RUN apk add --no-cache tcpdump ca-certificates
+# Runtime non-secret settings: MULTICORTEX_CAPTURE_ENABLED=1,
+# MULTICORTEX_LLAMA_PORT=7080, MULTICORTEX_DEVCORE_HOSTS=<actual gateway hosts>.
+# Docker/RunPod runtime must permit CAP_NET_RAW. Bootstrap still comes from secrets.

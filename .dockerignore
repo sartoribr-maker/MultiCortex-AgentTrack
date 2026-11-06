@@ -12,3 +12,8 @@ docs
 tests
 PROMPT.md
 __pycache__
+
+# Deployment/runtime kits and maintenance tooling are not part of the web app.
+artifacts
+scripts
+*.zip

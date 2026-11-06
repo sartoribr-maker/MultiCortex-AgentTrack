@@ -1,0 +1,52 @@
+{
+  "date": "2026-11-06",
+  "scope": "Production cutover completed; legacy root container retained for rollback; AgentTrack writer stopped",
+  "agenttrack_url": "https://devcore.multicortex.com.br/agenttrack/",
+  "agent_version": "2.1.0-rc1",
+  "agenttrack_image": "sha256:ea856b9f1633fb24059b13863361cd77ed5d157a7c5fc88f1ff8b0e551e23fb5",
+  "future_root_image": "sha256:cd1416fdc50ce2323e6fd091dfae37a898ae157310f589686d8f22701fcd4c10",
+  "kit": "Agente_Monitoramento.zip",
+  "kit_sha256": "94baf447221c31cf712c092f8e299dd812ed865e7d947d9272f8043e0334ab74",
+  "tests": {
+    "typescript": 65,
+    "python": 130,
+    "lint": "passed",
+    "typecheck": "passed",
+    "browser_agenttrack": "passed",
+    "browser_root": "passed",
+    "template_lifecycle": "passed",
+    "nginx_cutover_rollback": "passed",
+    "crm_https_browser": "passed",
+    "legacy_cookie_denial": "passed"
+  },
+  "runbook": "docs/agenttrack-readiness.md",
+  "remaining_acceptance": [
+    "Technician integrates ZIP into templates independently; template changes are outside dashboard cutover scope"
+  ],
+  "runpod_template_id": "mdj9hpta93",
+  "runpod_template_name": "multicortex-2.0.6-devcore",
+  "runpod_container_image": "multicortex/multicortex-2.0.6-work",
+  "runpod_image_visibility": "private",
+  "production_url": "https://devcore.multicortex.com.br/",
+  "production_image": "sha256:9af6f405450553a3dd0b565802c04a3864cb7dd91e6a435ed79a70c0e38c450e",
+  "production_cutover_local_time": "2026-11-06 18:36 America/Sao_Paulo",
+  "production_backup_directory": "/opt/multicortex/devcore-agenttrack/backups/production-cutover-20261106T213600Z",
+  "production_checks": {
+    "nginx_config": "passed",
+    "health": "healthy",
+    "pocs_and_credentials_preserved": true,
+    "real_telemetry_after_cutover": "2026-11-06T21:36:04.061Z",
+    "single_state_writer": true
+  },
+  "previous_production_image": "sha256:cd1416fdc50ce2323e6fd091dfae37a898ae157310f589686d8f22701fcd4c10",
+  "authentication": {
+    "mode": "crm",
+    "api": "https://crm.multicortex.com.br/api/v1",
+    "allowed_role": "Administrador",
+    "allowed_role_id": "fc9d02d1-2697-45ba-9ba9-c272f584cc51",
+    "local_fallback": false,
+    "session_minutes": 15,
+    "backup_directory": "/opt/multicortex/devcore-agenttrack/backups/crm-auth-20261106T223029Z"
+  },
+  "kit_build_name": "devcore-universal-agent-template-v2.zip"
+}

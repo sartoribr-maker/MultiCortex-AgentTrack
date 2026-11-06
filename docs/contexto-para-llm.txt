@@ -1,0 +1,327 @@
+CONTEXTO DO PROJETO: DEVCORE MONITOR
+=====================================
+Atualizado em 2026-11-06 (início do dia em UTC; noite de 05/11 em Brasília).
+Finalidade deste arquivo: dar a uma LLM o contexto completo do projeto (o que é, como
+funciona, onde roda, estado atual, regras e limites) para que ela oriente o responsável.
+Não contém segredos: tokens, senhas, hashes e api-keys ficam só nos servidores.
+
+Responda sempre em português do Brasil.
+
+
+1. O QUE É
+----------
+O DevCore Monitor é o painel interno da MultiCortex para acompanhar as POCs (provas de
+conceito) do DevCore. O DevCore é um servidor de LLM (llama.cpp, modelo "DEVCORE-Good",
+API compatível com OpenAI em /v1) usado por desenvolvedores de clientes nas suas IDEs.
+O painel mostra, por VM/POC: requisições, erros, tempos de resposta, espera até o primeiro
+token, uso de GPU/VRAM, ocupação dos slots do llama.cpp, desenvolvedores ativos (por IP)
+e um parecer técnico automático com recomendações.
+
+- URL do painel: https://devcore.multicortex.com.br (login da equipe, sem indexação).
+- Responsável: Tiago Sartori (login no painel: tiago.sartori@multicortex.ai).
+- POC atual: "POC Theós", empresa Theós, VM "devcore-demo-01", de 13/10/2026 a 11/11/2026, 6 slots.
+
+Até 05/11/2026 o painel morava dentro do site da MultiCortex (repositório SITE_LLMS, em
+/home/sartori/Multicortex/Projetos/SITE_LLMS). Em 05/11/2026 virou um projeto próprio,
+neste repositório, com build, deploy e contêiner próprios. A virada em produção já foi
+feita e verificada de ponta a ponta.
+
+
+2. ARQUITETURA E FLUXO DOS DADOS
+--------------------------------
+Desenvolvedor (IDE) --HTTPS--> devcore01.multicortex.com.br
+  -> gateway Apache 35.168.36.211
+  -> proxy da RunPod (25ymgt2hq5zout-7080.proxy.runpod.net)
+  -> pod RunPod, llama.cpp na porta 7080
+
+No pod (só saída de rede, modo "push"):
+  - devcore_http_capture.py: o tcpdump entrega uma CÓPIA passiva dos pacotes da porta 7080.
+    A captura lê só os cabeçalhos HTTP e grava /var/log/devcore-poc/requests-AAAAMMDD.log
+    (arquivo diário, em UTC). Os corpos (prompts, código, respostas) nunca são gravados.
+    Ela não fica no caminho do tráfego: se parar, o DevCore não é afetado.
+  - A cada 10 s a captura grava /var/lib/devcore-metrics/live.json (retrato do momento:
+    devs on-line, requisições em andamento, GPU) e envia por POST para .../ingest/<vm>/live.
+  - devcore_metrics_agent.py, a cada 1 min: agrega logs e amostras em horário de Brasília,
+    grava /srv/www/devcore-metrics/metrics.json e envia por POST para .../ingest/<vm>.
+  - O histórico de dias fechados fica em /var/lib/devcore-metrics/state.json (até 45 dias).
+
+Envio (os dois com "Authorization: Bearer <token da VM>"):
+  https://site.multicortex.com.br/api/devcore/ingest/devcore-demo-01        (metrics.json)
+  https://site.multicortex.com.br/api/devcore/ingest/devcore-demo-01/live   (retrato ao vivo)
+
+No EC2 (52.207.145.100, openSUSE Leap 16.0, usuário ec2-user):
+  nginx
+    vhost site.multicortex.com.br: location /api/devcore/ingest/ -> 127.0.0.1:3002 (painel novo);
+                                   o resto -> 127.0.0.1:3001 (site)
+    vhost devcore.multicortex.com.br: location / -> 127.0.0.1:3002 (painel novo);
+                                      /teste/ -> 127.0.0.1:8095 (ferramenta de teste de carga, outro projeto)
+  contêiner devcore-monitor-app-1 (127.0.0.1:3002): recebe os envios e serve o painel.
+  As métricas ficam NA MEMÓRIA do processo (sem banco). Depois de um restart, o painel mostra
+  "aguardando envio" até o próximo envio, em no máximo 1 min.
+
+
+3. RESTRIÇÕES QUE NÃO PODEM SER VIOLADAS
+----------------------------------------
+- Não propor mudanças no DNS de devcore01.multicortex.com.br, nas portas do gateway Apache
+  35.168.36.211 nem no llama.cpp. Por isso as medições são passivas (tcpdump).
+- Contrato com o agente (não pode mudar):
+  - endpoints POST /api/devcore/ingest/<id> e /api/devcore/ingest/<id>/live;
+  - Bearer token comparado em tempo constante;
+  - 401 IGUAL para VM inexistente e para token errado;
+  - corpo limitado a 2 MB (413 acima disso), JSON inválido = 400, schema inválido = 422, sucesso = 204;
+  - schema em src/lib/devcore/metrics-schema.ts, compatível com os agentes 1.0 a 1.4;
+  - tests/fixtures/devcore-metrics.sample.json é o contrato e precisa continuar passando.
+- Segurança e privacidade:
+  - tokens só no servidor, nunca no navegador nem nos logs;
+  - a captura nunca grava corpos de requisição;
+  - o IP de cada desenvolvedor é dado pessoal (LGPD) e só aparece com login.
+- Uma única instância do app, porque os dados ficam em memória.
+- Nada pode ser indexado: X-Robots-Tag "noindex, nofollow, noarchive" em todas as respostas,
+  meta robots no layout e robots.txt com Disallow: /.
+
+
+4. STACK
+--------
+- Next.js 16.3.5 (App Router, Turbopack), React 19.2.8, TypeScript 5.9, zod 4.6.5,
+  Tailwind CSS 4.3 (@tailwindcss/postcss), next-auth 5.0.0-beta.32 (Auth.js, @auth/core 0.41.3),
+  bcryptjs 3.0.3, tsx 4.23, ESLint 9 + eslint-config-next 16.3.5.
+- As versões são as mesmas do site de origem, de propósito.
+- Avisos do Next 16, que tem mudanças em relação a versões antigas:
+  - o middleware agora se chama proxy.ts (função proxy); este projeto não usa nenhum;
+  - as APIs de request são só assíncronas (params e searchParams são Promise);
+  - PageProps<"/"> e RouteContext<"/rota"> são tipos gerados: rode "next typegen" antes do tsc;
+  - "next lint" foi removido (usar eslint direto);
+  - a documentação local fica em node_modules/next/dist/docs/. AGENTS.md e CLAUDE.md
+    (gerados pelo next dev) pedem para lê-la antes de escrever código Next.
+- Agente da VM/pod: Python 3.6+, só biblioteca padrão.
+- Node 22 (imagem Docker node:22-alpine). Localmente roda com Node 24.
+- npm audit aponta 1 vulnerabilidade crítica (next, só afeta 'use cache', que não é usado)
+  e 1 alta (zod < 4.6.6). As versões foram mantidas iguais às do site; atualizar é uma
+  decisão pendente.
+
+
+5. ESTRUTURA DO REPOSITÓRIO
+---------------------------
+Raiz: /home/sartori/Multicortex/Projetos/DevCore_Track (git, branch main; ainda sem
+remoto no GitHub). Commits: 013a4f8 (projeto inicial) e 923749d (comandos da virada e
+validação do .env no deploy). PROMPT.md (instruções originais da separação) fica fora do
+Git, via .git/info/exclude.
+
+src/app/
+  layout.tsx            html pt-BR, fonte Carlito (next/font/google), meta robots noindex, devcore.css
+  devcore.css           @import "tailwindcss" + variáveis da marca (--dc-navy etc.)
+  page.tsx              painel (exige login; ?vm=<id> escolhe a VM)
+  actions.ts            Server Actions de login/logout (signIn credentials redirect:false; logout -> /entrar)
+  entrar/page.tsx       tela de login; mensagem de acesso negado quando reason=forbidden
+  entrar/login-form.tsx formulário (useActionState)
+  robots.ts             Disallow: / para tudo
+  api/devcore/ingest/[id]/route.ts        POST metrics.json do agente (público, com token)
+  api/devcore/ingest/[id]/live/route.ts   POST do retrato ao vivo (público, com token)
+  api/devcore/vms/route.ts                GET lista de VMs (exige login)
+  api/devcore/vms/[id]/metrics/route.ts   GET métricas da VM (exige login)
+  api/devcore/vms/[id]/live/route.ts      GET retrato ao vivo (exige login; o card "Agora" consulta a cada 10 s)
+
+src/lib/
+  auth.ts               NextAuth: Credentials, sessão JWT, trustHost, pages.signIn=/entrar
+  devcore/users.ts      lê DEVCORE_USERS; verifica a senha com bcrypt; hash "dummy" para e-mail
+                        inexistente (mesmo custo de tempo de uma senha errada)
+  devcore/session.ts    getDevcoreAccess(): anonymous | forbidden (e-mail fora da lista) | ok
+  devcore/api.ts        authorizeDevcoreApi(): 401 para anônimo, 403 para forbidden
+  devcore/http.ts       cabeçalhos das APIs (Cache-Control private,no-store; X-Robots-Tag)
+  devcore/ingest-request.ts  token em tempo constante, limite de 2 MB, JSON, schema (zod)
+  devcore/ingest.ts     armazenamento em memória (Map em globalThis) de metrics e live por VM
+  devcore/metrics.ts    status online/stale/unavailable; modo pull alternativo com cache de 60 s
+  devcore/live.ts       retrato ao vivo, "fresh" por 30 s
+  devcore/metrics-schema.ts  schema zod v1 do metrics.json e do live.json
+  devcore/registry.ts   cadastro de VMs (config/devcore-vms.json ou DEVCORE_VMS_FILE)
+  devcore/assessment.ts regras do parecer técnico
+  devcore/view.ts       formatação pt-BR, horário de Brasília, progresso da POC
+
+src/components/devcore/  brand, chart, dashboard, developers (lista por IP), live (card "Agora"), opinion (parecer)
+config/devcore-vms.json  cadastro de VMs, sem segredos (tokenEnv é só o NOME da variável)
+public/brand/mark.png    logo
+scripts/hash-password.ts gera uma entrada de DEVCORE_USERS (senha sem eco, mínimo de 12 caracteres, bcrypt custo 12)
+tests/devcore-dashboard.test.ts  27 testes (node:test): registro, schema, ingestão, live, parecer, noindex, login
+tests/fixtures/          devcore-metrics.sample.json (contrato), devcore-live.sample.json
+tests/server-only-stub.cjs  faz o pacote "server-only" funcionar fora do Next nos testes
+infra/devcore-vm-agent/  agente, captura, install.sh (VM com systemd/nginx), install-pod.sh (RunPod),
+                         devcore-supervisor.sh, units systemd, uninstall.sh, tests/ (39 testes unittest)
+infra/ec2/               nginx-devcore-vhost.conf (modelo), nginx-site-ingest-location.conf (regra da ingestão)
+Dockerfile               multi-stage, output standalone, usuário não root (nextjs uid 1001), HEALTHCHECK em /robots.txt
+docker-compose.prod.yml  serviço app, imagem devcore-monitor:current, 127.0.0.1:3002:3000, env_file .env.production
+deploy.sh                valida, faz o build local, envia a imagem (docker save | ssh), recria o contêiner, health check e rollback
+docs/devcore-dashboard.md  documentação completa (arquitetura, indicadores, agente, VMs, variáveis, login, deploy, testes)
+docs/virada.md           roteiro da virada site -> painel novo (já executado)
+docs/remocao-no-site.md  lista exata do que remover depois no repositório do site (pendente)
+
+
+6. REGRAS DOS INDICADORES (resumo; horário de Brasília, UTC-3 fixo)
+--------------------------------------------------------------------
+- Requisições: POST /v1/chat/completions do host DevCore (devcore_hosts do agent.conf).
+- Taxa de erro: (4xx + 5xx) / requisições. O 499 (cliente cancelou o streaming) fica fora
+  da taxa e aparece à parte como "canceladas".
+- Tempo de resposta (rt): do primeiro byte da requisição até o fim da resposta.
+- Espera até o modelo responder (uht): até o primeiro byte do corpo da resposta, isto é, o
+  primeiro token no streaming. Mediana e p95, só de respostas 2xx. Sem streaming, uht = rt.
+- Desenvolvedores ativos: IPs distintos (do X-Forwarded-For) com ao menos uma chamada /v1/*
+  2xx no dia. Localhost fica de fora. Vários devs atrás do mesmo NAT contam como um IP.
+- Lista por desenvolvedor (só com login): requisições, erros, primeira e última chamada,
+  tempo ativo (união dos intervalos, juntando chamadas com até 5 min de intervalo), medianas.
+- Card "Agora": devs on-line (requisição em andamento ou 2xx nos últimos 5 min), slots em
+  uso contra os slots da VM (o excedente está na fila), GPU agora. Vale 30 s; depois disso
+  o card mostra "Parado".
+- Requisições simultâneas: segundo a segundo, cada POST ocupa um slot de (ts - rt) até ts.
+- Status do painel: "Atrasado" quando generated_at tem mais de 5 min; "Indisponível" sem envio há mais de 15 min.
+- Parecer técnico, limites:
+  - contexto recusado >= 5% das requisições = atenção;
+  - espera p95 >= 10 s = observar; >= 30 s = atenção;
+  - geração < 20 tokens/s = observar; < 10 = atenção;
+  - slots esgotados > 0% = observar; >= 10% = atenção;
+  - VRAM >= 90% = observar; >= 97% = atenção;
+  - 5xx >= 1% = atenção.
+  - Sem o bloco today.server (journal do llama.cpp), o parecer é PARCIAL. No pod não há
+    journal (server_unit vazio), então hoje o parecer é sempre parcial.
+
+
+7. LOGIN (próprio, sem banco)
+-----------------------------
+- Auth.js (Credentials + JWT) contra a variável DEVCORE_USERS.
+- Formato: "email:hash[:Nome]", com várias entradas separadas por vírgula. O hash é bcrypt
+  em base64 (para evitar "$" no arquivo .env); um hash $2b$ cru também é aceito.
+- Para gerar uma entrada: npm run hash-password -- email@dominio "Nome".
+- Para gravar direto no servidor, sem copiar e colar (padrão que funcionou com o usuário):
+    npm run -s hash-password -- EMAIL "NOME" | ssh ec2-user@52.207.145.100 'read -r E; case "$E" in EMAIL:*) ;; *) echo ERRO >&2; exit 1;; esac; F=/opt/multicortex/devcore-monitor/.env.production; sudo sed -i "/^DEVCORE_USERS=/d" "$F"; printf "DEVCORE_USERS=%s\n" "$E" | sudo tee -a "$F" >/dev/null; echo gravado'
+  ATENÇÃO: esse comando SUBSTITUI a lista inteira. Para incluir uma pessoa, é preciso
+  acrescentar a nova entrada às atuais, separada por vírgula.
+  Depois de alterar, recrie o contêiner para valer.
+- Hoje existe 1 usuário: tiago.sartori@multicortex.ai ("Tiago Sartori").
+- Regras de acesso: anônimo vai para /entrar. Sessão de e-mail removido da lista = acesso
+  negado ("Sua conta não tem perfil de equipe MultiCortex."). Logout volta para /entrar.
+- Cookie __Secure-authjs.session-token, HttpOnly, só do host devcore.multicortex.com.br.
+- AUTH_SECRET é próprio do painel, diferente do site.
+
+
+8. VARIÁVEIS DE AMBIENTE
+------------------------
+Produção: /opt/multicortex/devcore-monitor/.env.production (root, permissão 600).
+Desenvolvimento: .env.local (modelo em .env.example).
+  AUTH_SECRET                            segredo do cookie (openssl rand -base64 32)
+  AUTH_URL                               https://devcore.multicortex.com.br (dev: http://localhost:3000)
+  DEVCORE_USERS                          usuários (seção 7)
+  DEVCORE_METRICS_TOKEN_DEVCORE_DEMO_01  token da VM; o MESMO que está em /etc/devcore-metrics/push.token no pod
+                                         e que ainda existe em /opt/multicortex/site/.env.production
+  DEVCORE_VMS_FILE                       opcional: cadastro externo de VMs, sem rebuild
+O deploy.sh confere a presença e o formato de todas, sem mostrar os valores.
+A variável DEVCORE_HOST do site não existe mais aqui.
+
+
+9. INFRAESTRUTURA E ACESSOS
+---------------------------
+EC2: ssh ec2-user@52.207.145.100 (o sudo não pede senha).
+  /opt/multicortex/devcore-monitor/  docker-compose.prod.yml + .env.production
+  Contêiner devcore-monitor-app-1 (projeto compose devcore-monitor), imagem devcore-monitor:current
+  (= devcore-monitor:923749d). Em cada deploy, a imagem anterior é guardada como devcore-monitor:rollback.
+  Outros contêineres no mesmo EC2 (não mexer): multicortex-site-app-1 (:3001) e o banco do site,
+  CRM (:8081), iamed, ferramenta de teste de carga (:8095).
+  nginx: /etc/nginx/vhosts.d/devcore.conf e multicortex.conf.
+    Regra da ingestão: /etc/nginx/devcore-monitor/ingest-location.conf, incluída no bloco 443
+    de site.multicortex.com.br.
+    Cópias de segurança da virada:
+      /etc/nginx/vhosts.d/multicortex.conf.bak-devcore-20261105-233855
+      /etc/nginx/vhosts.d/devcore.conf.bak-20261105-234027
+  Log de acesso: sudo tail /var/log/nginx/access.log.
+
+Pod RunPod (servidor DevCore monitorado, VM devcore-demo-01):
+  ssh -tt 25ymgt2hq5zout-64411d48@ssh.runpod.io -i ~/.ssh/id_ed25519
+  - SÓ funciona com terminal interativo: o usuário executa; a LLM prepara os comandos.
+  - Sem systemd, nginx, tar ou scp. python3 3.6.15 e tcpdump foram instalados com zypper em 05/11.
+  - O llama.cpp (multicortex-server-gpu-nvidia) roda com --port 7080 --parallel 6; GPU de ~140 GB de VRAM.
+  - Agente instalado em 05/11/2026 23:03 UTC com install-pod.sh (captura 1.4.0), supervisor
+    devcore-supervisor.sh, log em /var/log/devcore-poc/supervisor.log. Parar: install-pod.sh --stop.
+  - Se o pod for recriado, o disco é zerado: é preciso reinstalar python3/tcpdump e o agente
+    (com DEVCORE_METRICS_TOKEN no ambiente, para manter o token).
+  - Envio dos arquivos (o pod não tem tar): empacotar no PC, mandar em base64 pelo ssh e
+    extrair com python3 tarfile (comando completo em docs/devcore-dashboard.md, "Servidor em contêiner").
+
+VM antiga (openSUSE, systemd): opensuse@201.23.87.153 (sudo sem senha). Usa install.sh.
+Não é a VM monitorada hoje.
+
+Máquina local: PCASUSTIAGO (usuário sartori). Docker funciona sem sudo. O sudo local pede
+senha, então o usuário é quem executa comandos com sudo locais.
+
+
+10. COMANDOS DO DIA A DIA
+-------------------------
+Desenvolvimento:  npm install; npm run dev
+Validação:        npm run typecheck (next typegen + tsc); npx eslint .; npm test; npm run build
+Testes:           node --require ./tests/server-only-stub.cjs --import tsx --test tests/devcore-dashboard.test.ts
+                  python3 -m unittest discover -s infra/devcore-vm-agent/tests -v
+Teste local de ingestão:
+                  curl -X POST -H "Authorization: Bearer <token de teste>" --data-binary @metrics.json http://localhost:3000/api/devcore/ingest/devcore-demo-01  (resposta 204)
+Deploy:           ./deploy.sh (na raiz, com a árvore Git limpa)
+Rollback manual (EC2, em /opt/multicortex/devcore-monitor):
+                  sudo docker tag devcore-monitor:rollback devcore-monitor:current
+                  sudo docker compose -p devcore-monitor -f docker-compose.prod.yml up -d --force-recreate app
+Recriar o contêiner (ex.: depois de mudar o .env.production), mesmo diretório:
+                  sudo docker compose -p devcore-monitor -f docker-compose.prod.yml up -d --force-recreate app
+Verificações no pod:
+                  tail /var/log/devcore-poc/supervisor.log
+                  cat /var/lib/devcore-metrics/live.json
+                  tail -3 /var/log/devcore-poc/requests-$(date -u +%Y%m%d).log
+                  python3 -I -c "import json; d=json.load(open('/srv/www/devcore-metrics/metrics.json')); t=d['today']; print(d['generated_at'], t['date'], t['requests'], t['requests_ok'], t['errors_4xx'], t['developers'])"
+Cadastrar uma VM nova: instalar o agente com --push-url .../api/devcore/ingest/<id>; acrescentar
+  a VM em config/devcore-vms.json (id, company, pocName, vmName, pocStart, pocEnd, slots,
+  source "push", tokenEnv); definir DEVCORE_METRICS_TOKEN_<ID> no .env.production; ./deploy.sh.
+
+
+11. FORMA DE TRABALHAR COM O USUÁRIO (lições desta sessão)
+----------------------------------------------------------
+- Responder em português do Brasil.
+- Mandar UM comando com sudo por vez. Colagens de várias linhas se perdem, e um "read -rs X"
+  colado junto com outras linhas engole a linha seguinte como valor.
+- Evitar marcadores para o usuário substituir ("<entrada>", "SEU_EMAIL", "COLE_AQUI"): eles
+  foram colados literalmente várias vezes. Preferir comandos prontos e completos, com os
+  valores já preenchidos, ou pipelines que não exigem copiar e colar segredos.
+- Sempre dizer ONDE rodar cada comando (PC, EC2 ou pod) e qual prompt esperar
+  (pod: "4cbcd2bb55a9:/ #"; EC2: "ec2-user@ip-172-31-10-100"; PC: "sartori@PCASUSTIAGO").
+- Nunca ler nem imprimir tokens. Para conferir, mostrar só tamanho e formato
+  (wc -c; tr -d de caracteres válidos | od -c).
+- Deploy, mudança de nginx e push para o GitHub só com confirmação explícita, em cada etapa.
+- Para testar o DevCore de ponta a ponta sem colar a api-key, rodar no pod: ler a chave de
+  /proc/<pid>/cmdline do llama.cpp e chamar https://devcore01.multicortex.com.br/v1/chat/completions.
+  No OpenCode, o modelo padrão "Crouton Alpha Free" NÃO passa pelo DevCore: é preciso
+  selecionar o provider/modelo DevCore.
+
+
+12. ESTADO ATUAL (2026-11-06, 00:08 UTC)
+----------------------------------------
+- Painel novo em produção, saudável. Ingestão e painel virados para 127.0.0.1:3002.
+  Verificado:
+  - status "Online" e card "Agora" ao vivo;
+  - o pod envia metrics.json a cada minuto e live a cada 10 s, com resposta 204;
+  - as chamadas de teste aparecem nos números (3 requisições, 1 com sucesso, 2 com 401, 1 dev).
+- O dia 05/11 tem esses dados de teste. O histórico do pod anterior se perdeu quando ele foi
+  recriado; os dias anteriores da POC aparecem em branco.
+- O site (SITE_LLMS) AINDA contém o código antigo do painel. Ele não recebe mais tráfego do
+  painel nem da ingestão, mas continua no repositório e no contêiner do site.
+
+
+13. PENDÊNCIAS
+--------------
+1. Remover o painel do site (sessão no repositório SITE_LLMS), seguindo docs/remocao-no-site.md:
+   rotas src/app/devcore/** e src/app/api/devcore/**, src/lib/devcore/**, src/components/devcore/**,
+   o trecho devcoreProxy de src/proxy.ts, o trecho isDevcoreHost de src/app/robots.ts,
+   config/devcore-vms.json, infra/devcore-vm-agent/, os testes e fixtures do DevCore,
+   as variáveis DEVCORE_* do .env.example e do .env.production do servidor, e docs/devcore-dashboard.md.
+   NÃO remover public/brand/mark.png nem tests/ai-chat-server-only.cjs (o site usa).
+2. Criar o repositório no GitHub (gh) e fazer o push. Falta definir o nome e se é privado.
+3. Atualizar docs/devcore-dashboard.md com o pod atual (ID 25ymgt2hq5zout, GPU de ~140 GB).
+   A doc ainda diz "RTX PRO 6000, 96 GB".
+4. Opcional: reinstalar o agente com --push-url https://devcore.multicortex.com.br/api/devcore/ingest/devcore-demo-01,
+   pôr client_max_body_size 3m no location / de devcore.conf (o padrão do nginx é 1 MB) e
+   depois remover o include da ingestão do vhost do site.
+5. A api-key do llama.cpp foi exposta em texto claro numa conversa. Avaliar a troca (envolve o
+   llama.cpp e os clientes; decisão do responsável).
+6. Avaliar a atualização de next e zod por causa do npm audit (hoje mantidos iguais aos do site).
+7. Sem journal do llama.cpp no pod, o parecer técnico fica parcial (sem contexto recusado,
+   tokens/s etc.). Melhoria possível: ler o log do llama.cpp de outra forma.

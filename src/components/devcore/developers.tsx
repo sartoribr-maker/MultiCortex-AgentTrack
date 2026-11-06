@@ -6,6 +6,7 @@ import { formatActiveTime, formatDateBR, formatDuration, formatInt, formatPercen
 
 type Props = {
   developers: DevcoreDeveloper[];
+  pseudonymous?: boolean;
   date: string;
   generatedAt: string;
   open: boolean;
@@ -13,7 +14,7 @@ type Props = {
 };
 
 /** Today's usage per developer IP, opened from the "Desenvolvedores ativos hoje" card. */
-export function DevelopersDialog({ developers, date, generatedAt, open, onClose }: Props) {
+export function DevelopersDialog({ developers, date, generatedAt, open, onClose, pseudonymous = false }: Props) {
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => {
     const dialog = ref.current;
@@ -38,7 +39,7 @@ export function DevelopersDialog({ developers, date, generatedAt, open, onClose 
             Desenvolvedores ativos hoje ({formatDateBR(date)})
           </h2>
           <p className="mt-0.5 text-[13px] text-[var(--dc-text-muted)]">
-            Um por IP de origem. Vários desenvolvedores atrás do mesmo NAT aparecem como um. Dados até {formatTimeBR(generatedAt)} (Brasília).
+            {pseudonymous ? "Identificadores pseudonimizados por POD. Origens atrás do mesmo NAT aparecem como uma." : "Um por IP de origem. Vários desenvolvedores atrás do mesmo NAT aparecem como um."} Dados até {formatTimeBR(generatedAt)} (Brasília).
           </p>
         </div>
         <button
@@ -56,7 +57,7 @@ export function DevelopersDialog({ developers, date, generatedAt, open, onClose 
           <table className="dc-num w-full min-w-[760px] border-collapse text-sm">
             <thead className="sticky top-0 bg-white text-left text-[13px] text-[var(--dc-text-muted)]">
               <tr className="border-b border-[var(--dc-border)]">
-                <th scope="col" className="px-4 py-2 font-bold">Desenvolvedor (IP)</th>
+                <th scope="col" className="px-4 py-2 font-bold">{pseudonymous ? "Identificador de origem" : "Desenvolvedor (IP)"}</th>
                 <th scope="col" className="px-3 py-2 font-bold">Período</th>
                 <th scope="col" className="px-3 py-2 text-right font-bold">Tempo ativo</th>
                 <th scope="col" className="px-3 py-2 text-right font-bold">Inferências</th>

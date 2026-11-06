@@ -9,9 +9,13 @@
     "lint": "eslint",
     "typecheck": "next typegen && tsc --noEmit",
     "test": "npm run test:site && npm run test:agent",
-    "test:site": "node --require ./tests/server-only-stub.cjs --import tsx --test tests/*.test.ts",
-    "test:agent": "python3 -m unittest discover -s infra/devcore-vm-agent/tests",
-    "hash-password": "tsx scripts/hash-password.ts"
+    "test:site": "node scripts/test-site.cjs",
+    "test:agent": "python3 scripts/test-python.py",
+    "hash-password": "tsx scripts/hash-password.ts",
+    "test:e2e:pocs": "node tests/poc-browser.cjs",
+    "test:e2e:template": "node tests/template-runtime/e2e.cjs",
+    "test:migration-proxy": "node tests/migration-proxy.cjs",
+    "test:e2e:crm": "node tests/crm-browser.cjs"
   },
   "dependencies": {
     "bcryptjs": "3.0.3",

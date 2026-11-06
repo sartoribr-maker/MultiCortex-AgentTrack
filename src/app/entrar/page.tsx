@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { getDevcoreAccess } from "@/lib/devcore/session";
 import { BrandMark } from "@/components/devcore/brand";
 import { DevcoreLoginForm } from "./login-form";
+import { crmAuthEnabled } from "@/lib/devcore/crm-auth";
 
 export const metadata: Metadata = { title: "Entrar" };
 
@@ -19,8 +20,8 @@ export default async function DevcoreLoginPage() {
           <h1 className="text-xl font-bold text-[var(--dc-navy)]">Acesso da equipe</h1>
           <p className="mb-5 mt-1 text-sm text-[var(--dc-text-muted)]">
             {access.ok === false && access.reason === "forbidden"
-              ? "Sua conta não tem perfil de equipe MultiCortex."
-              : "Use o e-mail e a senha cadastrados para o painel."}
+              ? crmAuthEnabled() ? "Sua sessão expirou ou sua conta não possui acesso ativo como Administrador no CRM. Entre novamente." : "Sua conta não tem perfil de equipe MultiCortex."
+              : crmAuthEnabled() ? "Use seu e-mail e senha da Plataforma CRM. Acesso exclusivo ao perfil Administrador." : "Use o e-mail e a senha cadastrados para o painel."}
           </p>
           <DevcoreLoginForm />
         </div>

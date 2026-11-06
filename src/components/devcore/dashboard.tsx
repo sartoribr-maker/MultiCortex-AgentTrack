@@ -1,5 +1,7 @@
 "use client";
 
+import { BASE_PATH } from "@/lib/base-path";
+
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import type { DevcoreLiveResult } from "@/lib/devcore/live";
@@ -49,7 +51,7 @@ export function DevcoreDashboard({ vms, initial, initialLive }: Props) {
     if (!id) return;
     setLoading(true);
     try {
-      const response = await fetch(`/api/devcore/vms/${encodeURIComponent(id)}/metrics`, { cache: "no-store" });
+      const response = await fetch(`${BASE_PATH}/api/devcore/vms/${encodeURIComponent(id)}/metrics`, { cache: "no-store" });
       if (response.status === 401) {
         router.push("/entrar");
         return;
@@ -305,7 +307,7 @@ function Card({ label, value, detail, tone, onOpen, openLabel }: {
   );
 }
 
-function Indicators({ metrics }: { metrics: NonNullable<DevcoreMetricsResult["metrics"]> }) {
+export function Indicators({ metrics, pseudonymous = false }: { metrics: NonNullable<DevcoreMetricsResult["metrics"]>; pseudonymous?: boolean }) {
   const t = metrics.today;
   const errorPct = t.error_rate * 100;
   const [showDevelopers, setShowDevelopers] = useState(false);
@@ -315,7 +317,7 @@ function Indicators({ metrics }: { metrics: NonNullable<DevcoreMetricsResult["me
       <Card
         label="Desenvolvedores ativos hoje"
         value={formatInt(t.developers)}
-        detail="IPs distintos com chamada bem-sucedida"
+        detail={pseudonymous ? "Identificadores de origem com chamada bem-sucedida" : "IPs distintos com chamada bem-sucedida"}
         // Agent 1.3+ sends the per-IP breakdown; older agents only the count.
         onOpen={t.developer_list ? () => setShowDevelopers(true) : undefined}
         openLabel="Ver por desenvolvedor"
@@ -323,6 +325,7 @@ function Indicators({ metrics }: { metrics: NonNullable<DevcoreMetricsResult["me
       {t.developer_list && (
         <DevelopersDialog
           developers={t.developer_list}
+          pseudonymous={pseudonymous}
           date={t.date}
           generatedAt={metrics.generated_at}
           open={showDevelopers}
@@ -375,7 +378,7 @@ function hourTicks(starts: string[]) {
 
 const DAY_TICKS = [0, 360, 720, 1080, 1440].map((value) => ({ value, label: `${String(value / 60).padStart(2, "0")}h` }));
 
-function Charts({ metrics, vm }: { metrics: NonNullable<DevcoreMetricsResult["metrics"]>; vm: PublicDevcoreVm }) {
+export function Charts({ metrics, vm }: { metrics: NonNullable<DevcoreMetricsResult["metrics"]>; vm: PublicDevcoreVm }) {
   const hours = metrics.hourly_24h;
   const hourIndex = hours.map((_, i) => i);
   const hourLabels = hours.map((h) => `${formatDateBR(brasiliaDate(new Date(h.start)), true)} ${formatTimeBR(h.start)}`);

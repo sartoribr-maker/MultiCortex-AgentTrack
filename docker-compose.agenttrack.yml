@@ -1,0 +1,24 @@
+# Independent test instance: never use the production Compose project/name.
+services:
+  app:
+    image: devcore-agenttrack:current
+    restart: unless-stopped
+    env_file: .env.agenttrack
+    environment:
+      NEXT_PUBLIC_BASE_PATH: /agenttrack
+      HEALTH_PATH: /agenttrack/robots.txt
+      DEVCORE_METRICS_RETENTION_DAYS: "90"
+      DEVCORE_POC_MODE: "1"
+      DEVCORE_POCS_FILE: /var/lib/devcore-agenttrack/pocs.json
+      DEVCORE_VMS_FILE: /var/lib/devcore-agenttrack/vms.json
+      DEVCORE_AGENTS_FILE: /var/lib/devcore-agenttrack/agents.json
+      DEVCORE_TELEMETRY_DIR: /var/lib/devcore-agenttrack/telemetry
+    ports:
+      - "127.0.0.1:3103:3000"
+    volumes:
+      - ./state:/var/lib/devcore-agenttrack:Z
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
