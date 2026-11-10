@@ -1,0 +1,161 @@
+MULTICORTEX DEVCORE MONITOR - AGENTE NO TEMPLATE RUNPOD
+Guia para o administrador da infraestrutura
+Kit v3 - agente 2.2.0
+======================================================================
+
+OBJETIVO
+--------
+Deixar o agente de monitoramento instalado no template da RunPod. Depois
+disso, toda POD criada a partir do template sobe com o agente rodando, sem
+SSH e sem nenhum comando dentro da POD.
+
+O agente:
+- envia métricas de GPU e do llama.cpp ao Monitor da MultiCortex;
+- conta as requisições lendo apenas os cabeçalhos HTTP (não lê prompts nem
+  respostas);
+- só faz conexões HTTPS de saída e não abre portas;
+- não interfere no modelo: se o agente falhar, o modelo sobe normalmente.
+
+Nada é coletado até a MultiCortex aprovar a POD no painel.
+
+
+O QUE VOCÊ RECEBE
+-----------------
+1. devcore-universal-agent-template-v3.zip
+2. devcore-universal-agent-template-v3.zip.sha256
+3. Um token de inscrição com 64 caracteres, enviado em separado por canal
+   seguro. Ele não é senha nem chave da RunPod: serve só para a POD pedir
+   cadastro no Monitor.
+
+IMPORTANTE: o token NUNCA deve entrar na imagem, no Dockerfile ou no Git.
+Ele vai somente no Secret da RunPod (Passo 3).
+
+
+PASSO 1 - CONFERIR E EXTRAIR O PACOTE
+-------------------------------------
+Na pasta onde fica o Dockerfile do template:
+
+    sha256sum -c devcore-universal-agent-template-v3.zip.sha256
+
+O esperado é: devcore-universal-agent-template-v3.zip: OK
+
+Se não aparecer OK, pare e avise a MultiCortex.
+
+Depois extraia:
+
+    unzip devcore-universal-agent-template-v3.zip
+
+Vai aparecer a pasta devcore-universal-agent-template-v3/. Ela também tem um
+README.md com mais detalhes.
+
+
+PASSO 2 - AJUSTAR O DOCKERFILE DO TEMPLATE
+------------------------------------------
+2.1 Descubra o ENTRYPOINT e o CMD da imagem base:
+
+    docker inspect <imagem-base> --format '{{json .Config.Entrypoint}} {{json .Config.Cmd}}'
+
+    Exemplo: para a imagem multicortex/multicortex-2.0.6-work, anote o que
+    aparecer. Normalmente é ["/entrypoint.sh"].
+
+2.2 Acrescente ao FINAL do Dockerfile o bloco abaixo. Ele também está no
+    arquivo devcore-universal-agent-template-v3/Dockerfile.example.
+
+    # --- MultiCortex DevCore Monitor ---
+    # Dependências. Use a linha da sua base:
+    # base openSUSE (ex.: multicortex/multicortex-2.0.6-work):
+    RUN zypper -n in --no-recommends python3 tcpdump ca-certificates && zypper clean -a
+    # base Debian/Ubuntu (use esta em vez da anterior):
+    # RUN apt-get update && apt-get install -y --no-install-recommends python3 tcpdump ca-certificates && rm -rf /var/lib/apt/lists/*
+
+    COPY devcore-universal-agent-template-v3/ /tmp/devcore-agent-kit/
+    RUN python3 /tmp/devcore-agent-kit/install.py --install-dir /opt/multicortex/devcore-universal-agent \
+        && rm -rf /tmp/devcore-agent-kit
+
+    ENV MULTICORTEX_MONITOR_URL=https://devcore.multicortex.com.br/agenttrack
+
+    ENTRYPOINT ["/opt/multicortex/devcore-universal-agent/entrypoint-agent.sh", "/entrypoint.sh"]
+    # --- fim MultiCortex ---
+
+2.3 Ajuste a última linha (ENTRYPOINT) conforme o resultado do item 2.1:
+    - Se o ENTRYPOINT da base NÃO for /entrypoint.sh, troque "/entrypoint.sh"
+      pelo ENTRYPOINT real, mantendo cada parte como um item da lista.
+    - Se a base tiver CMD, repita esse CMD logo depois, por exemplo:
+          CMD ["argumento1", "argumento2"]
+      Trocar o ENTRYPOINT apaga o CMD herdado.
+
+    O agente sobe em segundo plano e em seguida o comando original do
+    template roda exatamente como antes: modelo, SSH e Jupyter.
+
+    ALTERNATIVA: se o template já tem um script de inicialização próprio, não
+    mexa no ENTRYPOINT. Apenas acrescente esta linha no script, ANTES do
+    comando que inicia o modelo:
+
+        python3 /opt/multicortex/devcore-universal-agent/template_boot.py || echo '[multicortex] agente não iniciou' >&2
+
+2.4 Gere e publique a imagem normalmente (docker build / docker push).
+
+
+PASSO 3 - CONFIGURAR NA RUNPOD
+------------------------------
+3.1 No console da RunPod, menu Secrets, crie um Secret com:
+        Nome:  multicortex_bootstrap
+        Valor: o token de inscrição de 64 caracteres
+
+3.2 Edite o template. Em Environment Variables, acrescente:
+        Chave: MULTICORTEX_BOOTSTRAP_TOKEN
+        Valor: {{ RUNPOD_SECRET_multicortex_bootstrap }}
+
+3.3 Aponte o template para a imagem nova do Passo 2.
+
+3.4 Mantenha a porta HTTP do modelo exposta como hoje (ex.: 7080).
+
+Não é preciso configurar mais nada. O agente descobre sozinho:
+- o ID da POD;
+- o llama.cpp e a porta em uso;
+- o endereço do proxy da RunPod.
+
+
+PASSO 4 - TESTAR COM UMA POD NOVA
+---------------------------------
+4.1 Suba uma POD a partir do template.
+
+4.2 Opcional: confira no terminal da POD.
+
+        cat /workspace/devcore-agent-state/$RUNPOD_POD_ID/agent.log 2>/dev/null || cat /root/devcore-agent-state/$RUNPOD_POD_ID/agent.log
+
+    Esperado: o "Agent" com um ID, seguido de "Estado: pending" até a
+    aprovação.
+
+4.3 Avise a MultiCortex que a POD subiu, informando o ID da POD. A
+    MultiCortex autoriza a POD no painel; a partir daí aparece
+    "Telemetria enviada" a cada 30 segundos no log.
+
+
+AJUSTES OPCIONAIS (Environment Variables do template)
+-----------------------------------------------------
+MULTICORTEX_LLAMA_PORT=<porta>
+    Use quando houver mais de um llama.cpp na POD; indica qual porta
+    monitorar.
+MULTICORTEX_CAPTURE_ENABLED=0
+    Desliga a contagem de requisições e mantém GPU e llama.cpp.
+MULTICORTEX_DEVCORE_HOSTS=<host1,host2>
+    Use quando o acesso ao modelo for por hosts diferentes do proxy RunPod.
+
+
+BOM SABER
+---------
+- Reiniciar a POD: o agente sobe sozinho, mantém a mesma identidade e
+  continua aprovado.
+- Recriar ou criar POD nova: ela aparece como nova no painel e precisa de
+  nova aprovação, o que é esperado.
+- Não copie a pasta devcore-agent-state/ de uma POD para outra nem para
+  dentro de imagens. Cada POD tem identidade própria.
+- O tcpdump precisa de CAP_NET_RAW, que já é o padrão para root na RunPod.
+- Logs: arquivo agent.log no diretório de estado, rotacionado em 3 arquivos
+  de 1 MB.
+- Se aparecer "[multicortex] Agente não iniciou" no log do container,
+  confira se o Secret e a variável do Passo 3 estão corretos. Mesmo nesse
+  caso o modelo sobe normalmente.
+
+Dúvidas: falar com a MultiCortex (Tiago Sartori).
