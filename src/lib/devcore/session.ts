@@ -7,7 +7,7 @@ import { currentCrmAdmin } from "./crm-session";
 
 export type DevcoreAccess =
   | { ok: true; user: { id: string; name: string | null; email: string } }
-  | { ok: false; reason: "anonymous" | "forbidden" };
+  | { ok: false; reason: "anonymous" | "expired" | "forbidden" };
 
 /**
  * CRM mode revalidates the active Admin profile on each request.
@@ -18,8 +18,10 @@ export const getDevcoreAccess = cache(async (): Promise<DevcoreAccess> => {
   const email = session?.user?.email;
   if (!email) return { ok: false, reason: "anonymous" };
   if (crmAuthEnabled()) {
-    const user = await currentCrmAdmin(email);
-    return user ? { ok: true, user: { id: user.id, name: user.name, email: user.email } } : { ok: false, reason: "forbidden" };
+    const result = await currentCrmAdmin(email);
+    if (result.status !== "ok") return { ok: false, reason: result.status };
+    const user = result.principal;
+    return { ok: true, user: { id: user.id, name: user.name, email: user.email } };
   }
   const user = findDevcoreUser(email);
   if (!user) return { ok: false, reason: "forbidden" };

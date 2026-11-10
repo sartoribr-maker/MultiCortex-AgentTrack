@@ -3,11 +3,13 @@ import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import { verifyDevcoreUser } from "@/lib/devcore/users";
 import { crmAuthEnabled, loginCrmAdmin } from "@/lib/devcore/crm-auth";
+import { CRM_SESSION_MAX_AGE_S, createCrmSession, endCrmSession } from "@/lib/devcore/crm-session-store";
 
 /**
  * CRM mode validates the CRM credentials and current Admin account.
  * Local credentials remain available only for isolated/legacy deployments.
- * The session is an encrypted JWT in a cookie of this host only.
+ * The session is an encrypted JWT in a cookie of this host only. In CRM mode it holds
+ * only an opaque id; CRM tokens stay server-side and are renewed there (crm-session-store).
  * Needs AUTH_SECRET and, in production, AUTH_URL=https://devcore.multicortex.com.br.
  */
 export const { auth, signIn, signOut } = NextAuth({
@@ -30,16 +32,16 @@ export const { auth, signIn, signOut } = NextAuth({
       },
     },
   } : {}),
-  session: { strategy: "jwt", ...(crmAuthEnabled() ? { maxAge: 15 * 60 } : {}) },
+  session: { strategy: "jwt", ...(crmAuthEnabled() ? { maxAge: CRM_SESSION_MAX_AGE_S } : {}) },
   callbacks: {
     jwt({ token, user }) {
-      if (user && "crmAccessToken" in user && "crmExpiresAt" in user) {
-        token.crmAccessToken = user.crmAccessToken;
-        token.crmExpiresAt = user.crmExpiresAt;
-      }
+      if (user && "crmSessionId" in user) token.crmSessionId = user.crmSessionId;
       return token;
     },
     // The default public session projection deliberately omits CRM token claims.
+  },
+  events: {
+    async signOut(message) { if ("token" in message && message.token) await endCrmSession(message.token.crmSessionId); },
   },
   pages: { signIn: BASE_PATH + "/entrar" },
   providers: [
@@ -55,8 +57,7 @@ export const { auth, signIn, signOut } = NextAuth({
         if (typeof email !== "string" || typeof password !== "string" || !email || !password) return null;
         if (crmAuthEnabled()) {
           const user = await loginCrmAdmin(email, password);
-          return user ? { id: user.id, email: user.email, name: user.name,
-            crmAccessToken: user.accessToken, crmExpiresAt: user.expiresAt } : null;
+          return user ? { id: user.id, email: user.email, name: user.name, crmSessionId: createCrmSession(user) } : null;
         }
         const user = await verifyDevcoreUser(email, password);
         return user ? { id: user.email, email: user.email, name: user.name } : null;

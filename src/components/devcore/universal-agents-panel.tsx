@@ -46,6 +46,7 @@ export function UniversalAgentsPanel() {
         cache: "no-store",
       });
 
+      if (response.status === 401) { window.location.assign(BASE_PATH + "/entrar"); return; }
       if (!response.ok) {
         throw new Error("Não foi possível consultar os agentes.");
       }

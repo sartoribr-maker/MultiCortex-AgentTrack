@@ -8,7 +8,7 @@ export { DEVCORE_API_HEADERS, devcoreJson } from "./http";
 export async function authorizeDevcoreApi(): Promise<Response | null> {
   const access = await getDevcoreAccess();
   if (!access.ok) {
-    return access.reason === "anonymous"
+    return access.reason !== "forbidden"
       ? devcoreJson({ error: "Entre na sua conta." }, 401)
       : devcoreJson({ error: "Acesso negado." }, 403);
   }

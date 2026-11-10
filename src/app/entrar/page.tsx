@@ -19,8 +19,10 @@ export default async function DevcoreLoginPage() {
         <div className="rounded-xl border border-[var(--dc-border)] bg-white p-6 shadow-sm">
           <h1 className="text-xl font-bold text-[var(--dc-navy)]">Acesso da equipe</h1>
           <p className="mb-5 mt-1 text-sm text-[var(--dc-text-muted)]">
-            {access.ok === false && access.reason === "forbidden"
-              ? crmAuthEnabled() ? "Sua sessão expirou ou sua conta não possui acesso ativo como Administrador no CRM. Entre novamente." : "Sua conta não tem perfil de equipe MultiCortex."
+            {access.ok === false && access.reason === "expired"
+              ? "Sua sessão expirou. Entre novamente."
+              : access.ok === false && access.reason === "forbidden"
+              ? crmAuthEnabled() ? "Sua conta não possui acesso ativo como Administrador no CRM." : "Sua conta não tem perfil de equipe MultiCortex."
               : crmAuthEnabled() ? "Use seu e-mail e senha da Plataforma CRM. Acesso exclusivo ao perfil Administrador." : "Use o e-mail e a senha cadastrados para o painel."}
           </p>
           <DevcoreLoginForm />

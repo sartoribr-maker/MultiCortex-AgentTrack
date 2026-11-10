@@ -64,6 +64,7 @@ export function PocWorkspace({ pocId }: { pocId?: string }) {
     const request = ++sequence.current;
     try {
       const response = await fetch(BASE_PATH + "/api/devcore/pocs", { cache: "no-store", signal });
+      if (response.status === 401) { window.location.assign(BASE_PATH + "/entrar"); return; }
       if (!response.ok) throw new Error(response.status === 403 ? "Seu usuário não possui acesso administrativo." : "Não foi possível atualizar os dados.");
       const result: PocOverview = await response.json();
       if (!signal?.aborted && request === sequence.current) { setData(result); setError(""); }
@@ -79,6 +80,7 @@ export function PocWorkspace({ pocId }: { pocId?: string }) {
     setBusy(true); setFormError("");
     try {
       const response = await fetch(BASE_PATH + "/api/devcore/" + path, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+      if (response.status === 401) { window.location.assign(BASE_PATH + "/entrar"); return false; }
       if (!response.ok) { const result = await response.json(); throw new Error(result.error || "Operação não concluída"); }
       await refresh(); return true;
     } catch (cause) { const message = cause instanceof Error ? cause.message : "Operação não concluída"; setFormError(message); setError(message); return false; }

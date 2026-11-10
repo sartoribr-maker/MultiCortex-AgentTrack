@@ -22,10 +22,10 @@ export async function authorizeDevcoreAdmin(request?: Request): Promise<Response
   const access = await getDevcoreAccess();
 
   if (!access.ok) {
-    return devcoreJson(
-      { error: "Acesso administrativo negado." },
-      403,
-    );
+    // 401 = no valid session (sign in again); 403 = signed in but not an Admin.
+    return access.reason === "forbidden"
+      ? devcoreJson({ error: "Acesso administrativo negado." }, 403)
+      : devcoreJson({ error: "Sessão expirada. Entre novamente." }, 401);
   }
 
   // CRM mode has already checked current Admin role and active status.
