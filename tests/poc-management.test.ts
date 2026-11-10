@@ -4,7 +4,7 @@ import { mkdtempSync, readFileSync, writeFileSync, statSync, rmSync, existsSync 
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { randomUUID } from "node:crypto";
-import { pocInput, summarizePods, type PodView } from "../src/lib/devcore/poc-model";
+import { defaultPodId, pocInput, summarizePods, type PodView } from "../src/lib/devcore/poc-model";
 
 test("POC registry, linking, authorization and telemetry", async t => {
   const directory = mkdtempSync(join(tmpdir(), "devcore-pocs-"));
@@ -145,4 +145,17 @@ test("POC registry, linking, authorization and telemetry", async t => {
       assert.equal(JSON.stringify(audit).includes(next.token), false);
     });
   } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
+test("POC page opens on the active POD, not the first registered", () => {
+  const pod = (id: string, status: "pending" | "approved" | "revoked" | null, online: boolean, receivedAt: string | null) =>
+    ({ id, name: id, podId: id, agentId: null, createdAt: "", online, receivedAt, devices: [], servers: [],
+      agent: status ? { id, status, podId: id, hostname: id, version: "x" } : null }) as unknown as PodView;
+  const old = pod("old", "revoked", false, "2026-11-07T03:29:40Z");
+  const live = pod("live", "approved", true, "2026-11-10T18:48:55Z");
+  assert.equal(defaultPodId([old, live]), "live");
+  assert.equal(defaultPodId([pod("a", "approved", true, "2026-11-10T18:00:00Z"), pod("b", "approved", true, "2026-11-10T18:01:00Z")]), "b");
+  assert.equal(defaultPodId([pod("p", "pending", false, null), pod("s", "approved", false, "2026-11-09T00:00:00Z")]), "s");
+  assert.equal(defaultPodId([old]), "old");
+  assert.equal(defaultPodId([]), "");
 });

@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState, type ReactNode } from "react";
 import { Chart } from "./chart";
 import { PocOperationalPanel } from "./poc-operational-panel";
-import { summarizePods, type PocView } from "@/lib/devcore/poc-model";
+import { defaultPodId, summarizePods, type PocView } from "@/lib/devcore/poc-model";
 import { combineGpuHistory, gpuDayStats } from "@/lib/devcore/poc-dashboard-model";
 import { brasiliaDate, brasiliaMinutes, formatDateBR, formatTimeBR, pocProgress } from "@/lib/devcore/view";
 
@@ -31,7 +31,7 @@ export function PocDetailDashboard({ poc, pocs, updatedAt, busy, onRefresh, onEd
   onRefresh: () => void; onEdit: () => void; onAdd: () => void; onClose: () => void; children: ReactNode;
 }) {
   const router = useRouter();
-  const [podId, setPodId] = useState(poc.pods[0]?.id ?? "");
+  const [podId, setPodId] = useState(() => defaultPodId(poc.pods));
   const pods = podId ? poc.pods.filter(p => p.id === podId) : poc.pods;
   const summary = summarizePods(pods);
   const points = combineGpuHistory(pods);

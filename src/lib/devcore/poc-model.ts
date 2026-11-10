@@ -43,6 +43,13 @@ export type PodView = PocPod & {
 export type PocView = Omit<Poc, "pods"> & { pods: PodView[] };
 export type PocOverview = { pocs: PocView[]; unassignedAgents: PublicAgent[]; updatedAt: string };
 
+/** POD shown first on a POC page: approved and online, then approved, then any; latest telemetry wins. */
+export function defaultPodId(pods: PodView[]): string {
+  const rank = (p: PodView) => p.agent?.status === "approved" ? (p.online ? 2 : 1) : 0;
+  const best = [...pods].sort((a, b) => rank(b) - rank(a) || (b.receivedAt ?? "").localeCompare(a.receivedAt ?? ""))[0];
+  return best?.id ?? "";
+}
+
 export function summarizePods(pods: PodView[]) {
   const approved = pods.filter(p => p.agent?.status === "approved");
   const online = approved.filter(p => p.online);
