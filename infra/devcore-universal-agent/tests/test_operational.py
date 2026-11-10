@@ -140,3 +140,25 @@ class OperationalTests(unittest.TestCase):
 
 
 if __name__ == '__main__': unittest.main()
+
+
+class RunPodDefaultsTests(unittest.TestCase):
+    def test_capture_on_by_default_only_inside_runpod(self):
+        self.assertTrue(collector.capture_enabled({'RUNPOD_POD_ID': '4vtw3ny63c0ucm'}))
+        self.assertFalse(collector.capture_enabled({}))
+        self.assertFalse(collector.capture_enabled({'RUNPOD_POD_ID': 'bad id'}))
+        self.assertFalse(collector.capture_enabled({'RUNPOD_POD_ID': 'pod', 'MULTICORTEX_CAPTURE_ENABLED': '0'}))
+        self.assertTrue(collector.capture_enabled({'MULTICORTEX_CAPTURE_ENABLED': '1'}))
+
+    def test_hosts_derived_from_runpod_proxy(self):
+        self.assertEqual(collector.devcore_hosts({'RUNPOD_POD_ID': '4vtw3ny63c0ucm'}, 7080),
+                         '4vtw3ny63c0ucm-7080.proxy.runpod.net,devcore01.multicortex.com.br')
+        self.assertEqual(collector.devcore_hosts({'RUNPOD_POD_ID': 'p', 'MULTICORTEX_DEVCORE_HOSTS': 'a.example'}, 7080), 'a.example')
+        self.assertEqual(collector.devcore_hosts({}, 7080), '')
+        self.assertEqual(collector.devcore_hosts({'RUNPOD_POD_ID': 'p'}, None), '')
+
+    def test_auto_capture_without_tcpdump_reports_reason(self):
+        with tempfile.TemporaryDirectory() as state, \
+                mock.patch.dict(os.environ, {'RUNPOD_POD_ID': 'pod1'}, clear=True), \
+                mock.patch.object(collector.shutil, 'which', return_value=None):
+            self.assertEqual(collector.owned_source([{'port': 7080, 'slots': 6}], state)[2], 'tcpdump_unavailable')

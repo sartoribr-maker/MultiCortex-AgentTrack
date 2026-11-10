@@ -17,7 +17,9 @@ def select_state(environ):
     explicit = environ.get("MULTICORTEX_AGENT_STATE_DIR", "")
     if not explicit and not pod_id:
         raise RuntimeError("Informe RUNPOD_POD_ID ou um diretório de estado exclusivo")
-    state = explicit or os.path.join("/workspace/devcore-agent-state", pod_id)
+    # /workspace is the RunPod persistent volume; PODs without it keep state under /root.
+    base = "/workspace" if os.path.isdir("/workspace") else "/root"
+    state = explicit or os.path.join(base, "devcore-agent-state", pod_id)
     if not os.path.isabs(state):
         raise RuntimeError("Diretório de estado deve ser absoluto")
     state = os.path.normpath(state)

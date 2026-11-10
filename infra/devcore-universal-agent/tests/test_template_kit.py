@@ -7,6 +7,7 @@ import sys
 import tempfile
 import time
 import unittest
+from unittest import mock
 import zipfile
 
 AGENT = Path(__file__).resolve().parents[1]
@@ -112,7 +113,12 @@ def main():
     def test_default_state_is_scoped_by_pod(self):
         one, _ = boot_module.select_state({'RUNPOD_POD_ID': 'one'})
         two, _ = boot_module.select_state({'RUNPOD_POD_ID': 'two'})
-        self.assertEqual(one, '/workspace/devcore-agent-state/one')
+        base = '/workspace' if os.path.isdir('/workspace') else '/root'
+        self.assertEqual(one, base + '/devcore-agent-state/one')
+        with mock.patch.object(boot_module.os.path, 'isdir', return_value=False):
+            self.assertEqual(boot_module.select_state({'RUNPOD_POD_ID': 'x'})[0], '/root/devcore-agent-state/x')
+        with mock.patch.object(boot_module.os.path, 'isdir', return_value=True):
+            self.assertEqual(boot_module.select_state({'RUNPOD_POD_ID': 'x'})[0], '/workspace/devcore-agent-state/x')
         self.assertNotEqual(one, two)
         for value in ('../bad', 'bad/id'):
             with self.assertRaises(RuntimeError):

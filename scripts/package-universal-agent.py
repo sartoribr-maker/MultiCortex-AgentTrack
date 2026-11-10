@@ -8,7 +8,7 @@ import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
 AGENT = ROOT / "infra/devcore-universal-agent"
-KIT_NAME = "devcore-universal-agent-template-v2"
+KIT_NAME = "devcore-universal-agent-template-v3"
 FILES = ("supervisor.py", "discovery.py", "fallback_monitor.py", "gpu_discovery.py",
          "llama_discovery.py", "agent_service.py", "template_boot.py", "entrypoint-agent.sh",
          "operational_collector.py", "capture_guard.py", "http_capture_core.py", "request_metrics_core.py")
@@ -16,7 +16,7 @@ FILES = ("supervisor.py", "discovery.py", "fallback_monitor.py", "gpu_discovery.
 
 def build(destination):
     members = {name: (AGENT / name).read_bytes() for name in FILES}
-    manifest = {"kit_version": "2", "agent_version": "2.1.0-rc1", "sha256": {
+    manifest = {"kit_version": "3", "agent_version": "2.2.0", "sha256": {
         name: hashlib.sha256(data).hexdigest() for name, data in members.items()}}
     members["MANIFEST.json"] = (json.dumps(manifest, indent=2, sort_keys=True) + "\n").encode()
     for name in ("install.py", "README.md", "Dockerfile.example"):
@@ -37,7 +37,7 @@ def build(destination):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--output", default=str(ROOT / "artifacts/devcore-universal-agent-template-v2.zip"))
+    parser.add_argument("--output", default=str(ROOT / "artifacts/devcore-universal-agent-template-v3.zip"))
     args = parser.parse_args()
     target = Path(args.output).resolve()
     print(str(target))

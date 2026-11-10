@@ -1,24 +1,23 @@
-# Merge these instructions into the Dockerfile already used for the model.
-# This is an integration example, not a replacement base image or startup command.
-# Python 3.6+, trusted CA certificates and /bin/sh must already be available.
-COPY devcore-universal-agent-template-v2/ /tmp/devcore-agent-kit/
-RUN python3 /tmp/devcore-agent-kit/install.py \
-    --install-dir /opt/multicortex/devcore-universal-agent
+# MultiCortex DevCore Monitor — acrescentar ao FINAL do Dockerfile do template.
+# Não substitui a imagem base nem o comando que inicia o modelo.
 
-# Non-secret default, overridable when creating each POD.
+# 1) Dependências do agente (python3 3.6+ e tcpdump). Use o bloco da sua base:
+# openSUSE (imagem multicortex/multicortex-2.0.6-work):
+RUN zypper -n in --no-recommends python3 tcpdump ca-certificates && zypper clean -a
+# Debian/Ubuntu:
+# RUN apt-get update && apt-get install -y --no-install-recommends python3 tcpdump ca-certificates && rm -rf /var/lib/apt/lists/*
+
+# 2) Código do agente (somente código; nenhuma credencial entra na imagem).
+COPY devcore-universal-agent-template-v3/ /tmp/devcore-agent-kit/
+RUN python3 /tmp/devcore-agent-kit/install.py --install-dir /opt/multicortex/devcore-universal-agent \
+    && rm -rf /tmp/devcore-agent-kit
+
+# 3) Endereço do Monitor (não é segredo).
 ENV MULTICORTEX_MONITOR_URL=https://devcore.multicortex.com.br/agenttrack
 
-# In the EXISTING startup script, add BEFORE the original exec/model command:
-# python3 /opt/multicortex/devcore-universal-agent/template_boot.py || \
-#     echo '[multicortex] Confira os logs: agente nao iniciou' >&2
-# Keep all existing SSH/Jupyter/llama.cpp startup commands.
-# Do NOT run template_boot.py, configure, start or supervisor.py during build.
-# Do NOT put a real bootstrap token in ENV/ARG/COPY or image layers.
-
-# If no existing local metrics source is present, install tcpdump IN THE IMAGE,
-# using the base image's package manager (not on the developer workstation).
-# Debian/Ubuntu example: RUN apt-get update && apt-get install -y --no-install-recommends tcpdump ca-certificates
-# Alpine example: RUN apk add --no-cache tcpdump ca-certificates
-# Runtime non-secret settings: MULTICORTEX_CAPTURE_ENABLED=1,
-# MULTICORTEX_LLAMA_PORT=7080, MULTICORTEX_DEVCORE_HOSTS=<actual gateway hosts>.
-# Docker/RunPod runtime must permit CAP_NET_RAW. Bootstrap still comes from secrets.
+# 4) Iniciar o agente junto com o template, sem trocar o comando original.
+#    O agente sobe em segundo plano e em seguida o comando original roda normalmente.
+#    Troque "/entrypoint.sh" pelo ENTRYPOINT real da imagem base, se for outro
+#    (conferir com: docker inspect <imagem> --format '{{json .Config.Entrypoint}} {{json .Config.Cmd}}').
+#    Se a imagem base tiver CMD, repita-o aqui: trocar ENTRYPOINT apaga o CMD herdado.
+ENTRYPOINT ["/opt/multicortex/devcore-universal-agent/entrypoint-agent.sh", "/entrypoint.sh"]

@@ -10,6 +10,7 @@ import hashlib
 import hmac
 import json
 import os
+import re
 import shutil
 import socket
 import subprocess
@@ -148,9 +149,31 @@ def atomic(path, value):
             os.unlink(temporary)
 
 
+POD_ID = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
+
+
+def capture_enabled(environ):
+    """Explicit 1/0 wins; on a RunPod POD (RUNPOD_POD_ID set) capture is on by default."""
+    value = environ.get("MULTICORTEX_CAPTURE_ENABLED", "").strip()
+    if value in ("0", "1"):
+        return value == "1"
+    return bool(POD_ID.match(environ.get("RUNPOD_POD_ID", "").strip()))
+
+
+def devcore_hosts(environ, port):
+    """Explicit list wins; otherwise the RunPod HTTP proxy host seen in X-Forwarded-Host."""
+    explicit = environ.get("MULTICORTEX_DEVCORE_HOSTS", "").strip()
+    if explicit:
+        return explicit
+    pod_id = environ.get("RUNPOD_POD_ID", "").strip()
+    if not POD_ID.match(pod_id) or not str(port).isdigit():
+        return ""
+    return "{0}-{1}.proxy.runpod.net,devcore01.multicortex.com.br".format(pod_id.lower(), port)
+
+
 def owned_source(servers, state_dir):
     global _CAPTURE, _LAST_BUILD, _CAPTURE_STARTED
-    if os.environ.get("MULTICORTEX_CAPTURE_ENABLED") != "1":
+    if not capture_enabled(os.environ):
         return None, None, "source_not_configured"
     if shutil.which("tcpdump") is None:
         return None, None, "tcpdump_unavailable"
@@ -160,7 +183,7 @@ def owned_source(servers, state_dir):
         choices = [s for s in choices if str(s["port"]) == port]
     if len(choices) != 1:
         return None, None, "server_selection_required"
-    hosts = os.environ.get("MULTICORTEX_DEVCORE_HOSTS", "").strip()
+    hosts = devcore_hosts(os.environ, choices[0]["port"])
     if not hosts or any(c in hosts for c in "\r\n%"):
         return None, None, "hosts_required"
     root = os.path.join(state_dir, "operational")

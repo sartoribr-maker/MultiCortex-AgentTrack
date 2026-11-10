@@ -14,7 +14,7 @@ import tempfile
 import uuid
 
 
-AGENT_VERSION = "2.1.0-rc1"
+AGENT_VERSION = "2.2.0"
 DEFAULT_STATE_DIR = "/var/lib/devcore-universal-agent"
 
 

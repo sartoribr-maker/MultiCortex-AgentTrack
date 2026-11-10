@@ -42,7 +42,7 @@ class DiscoveryTests(unittest.TestCase):
                 {"RUNPOD_POD_ID": "pod-teste-002"}
             )
             self.assertEqual(result["pod_id"], "pod-teste-002")
-            self.assertEqual(result["agent_version"], "2.1.0-rc1")
+            self.assertEqual(result["agent_version"], "2.2.0")
             self.assertIn("agent_id", result)
             self.assertIn("hostname", result)
 
